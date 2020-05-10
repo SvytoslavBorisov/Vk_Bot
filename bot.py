@@ -4,6 +4,7 @@ from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from requests import get, post, delete
 from werkzeug.security import check_password_hash
+import beautifulsoup4
 
 TOKEN = '74e37cc73292c748af3aa25a6d552d69d93a7be6e10ba227c2676282098c7707e9816d6bee18927a21a8a'
 GROUP_ID = 194326967
@@ -51,11 +52,12 @@ for event in long_poll.listen():
             user_in = 0
             kb = kb_out
         if event.message.text.lower() == 'мой рейтинг':
-            try_to_in = 0
             if user_in:
+                k = get('https://nothing-nowhere-nowhen.ru/api/12345/users').json()['users']
+                k.sort(key=lambda x: x['rating'], reverse=True)
                 p = ID_WITH_USERS[event.obj.message["from_id"]]
                 vk.messages.send(user_id=event.obj.message['from_id'],
-                                 message=f'{p["nickname"]}, у вас {p["rating"]} очков рейтинга',
+                                 message=f'{p["nickname"]}, у вас {p["rating"]} очков рейтинга. Вы находитесь на {k.index(p) + 1} месте общего зачёта.',
                                  random_id=random.randint(0, 2 ** 64),
                                  keyboard=kb)
             else:
@@ -65,9 +67,8 @@ for event in long_poll.listen():
                                  keyboard=kb)
 
         elif event.message.text.lower() == 'общий рейтинг':
-            try_to_in = 0
             k = get('https://nothing-nowhere-nowhen.ru/api/12345/users').json()['users']
-            k.sort(key=lambda x: -x['rating'])
+            k.sort(key=lambda x: x['rating'], reverse=True)
             s = ''
             for i in range(min(len(k), 10)):
                 s += f'{i + 1}) {k[i]["surname"]} "{k[i]["nickname"]}" {k[i]["name"]} - {k[i]["rating"]}\n'
