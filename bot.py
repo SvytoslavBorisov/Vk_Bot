@@ -8,7 +8,6 @@ from werkzeug.security import check_password_hash
 TOKEN = '74e37cc73292c748af3aa25a6d552d69d93a7be6e10ba227c2676282098c7707e9816d6bee18927a21a8a'
 GROUP_ID = 194326967
 USERS = []
-ID_WITH_USERS = {}
 
 
 def create_keyboard_in():
@@ -46,7 +45,7 @@ def create_keyboard_questions_answer(p, p1, p2, p3):
     keyboard.add_button(p2, color=VkKeyboardColor.DEFAULT)
     keyboard.add_button(p3, color=VkKeyboardColor.DEFAULT)
     keyboard.add_line()
-    keyboard.add_button('Завершить игру!', color=VkKeyboardColor.NEGATIVE)
+    keyboard.add_button('Завершить игру', color=VkKeyboardColor.NEGATIVE)
 
     return keyboard.get_keyboard()
 
@@ -58,143 +57,152 @@ vk = vk_session.get_api()
 
 kb_in = create_keyboard_in()
 kb_out = create_keyboard_out()
-try_to_in = 0
-try_to_in_for_open = 0
-flag_game = 0
-answers = []
-number_quest = 0
-right_answers = 0
-def_answers = 0
+
+all_info = {}
 
 for event in long_poll.listen():
     if event.type == VkBotEventType.MESSAGE_NEW:
+        if event.obj.message['from_id'] not in all_info:
+            all_info[event.obj.message['from_id']] = {}
         if event.obj.message['from_id'] in USERS:
-            user_in = 1
+            all_info[event.obj.message['from_id']]['user_in'] = 1
             kb = kb_in
         else:
-            user_in = 0
+            all_info[event.obj.message['from_id']]['user_in'] = 0
             kb = kb_out
         if event.message.text.lower() == 'мой рейтинг':
-            if user_in:
+            all_info[event.obj.message['from_id']]['try_to_in'] = 0
+            if all_info[event.obj.message['from_id']]['user_in']:
                 k = get('https://nothing-nowhere-nowhen.ru/api/12345/users').json()['users']
                 k.sort(key=lambda x: x['rating'], reverse=True)
-                p = ID_WITH_USERS[event.obj.message["from_id"]]
+                p = all_info[event.obj.message["from_id"]]['user']
                 vk.messages.send(user_id=event.obj.message['from_id'],
                                  message=f'{p["nickname"]}, у вас {p["rating"]} очков рейтинга. Вы находитесь на {k.index(p) + 1} месте общего зачёта.',
                                  random_id=random.randint(0, 2 ** 64),
                                  keyboard=kb)
             else:
                 vk.messages.send(user_id=event.obj.message['from_id'],
-                                 message='Вы не авторизованы',
+                                 message='Вы не авторизованы.',
                                  random_id=random.randint(0, 2 ** 64),
                                  keyboard=kb)
 
         elif event.message.text.lower() == 'общий рейтинг':
+            all_info[event.obj.message['from_id']]['try_to_in'] = 0
             k = get('https://nothing-nowhere-nowhen.ru/api/12345/users').json()['users']
             k.sort(key=lambda x: x['rating'], reverse=True)
             s = ''
             for i in range(min(len(k), 10)):
-                s += f'{i + 1}) {k[i]["surname"]} "{k[i]["nickname"]}" {k[i]["name"]} - {k[i]["rating"]}\n'
+                s += f'{i + 1}) {k[i]["name"]} "{k[i]["nickname"]}" {k[i]["surname"]} - {k[i]["rating"]}\n'
             vk.messages.send(user_id=event.obj.message['from_id'],
                              message=s,
                              random_id=random.randint(0, 2 ** 64),
                              keyboard=kb)
         elif event.message.text.lower() == 'выйти':
-            try_to_in = 0
-            if user_in:
+            all_info[event.obj.message['from_id']]['try_to_in'] = 0
+            if all_info[event.obj.message['from_id']]['user_in']:
                 USERS.remove(event.obj.message['from_id'])
                 vk.messages.send(user_id=event.obj.message['from_id'],
-                                 message='Вы успешно вышли',
+                                 message='Вы успешно вышли.',
                                  random_id=random.randint(0, 2 ** 64),
                                  keyboard=kb_out)
             else:
                 vk.messages.send(user_id=event.obj.message['from_id'],
-                                 message='Вы не авторизованы',
+                                 message='Вы не авторизованы.',
                                  random_id=random.randint(0, 2 ** 64),
                                  keyboard=kb)
         elif event.message.text.lower() == 'зайти':
-            if not user_in:
-                try_to_in_for_open = 1
+            if not all_info[event.obj.message['from_id']]['user_in']:
+                all_info[event.obj.message['from_id']]['try_to_in'] = 1
                 vk.messages.send(user_id=event.obj.message['from_id'],
-                                 message='Введите ваш логин и пароль на сайте https://nothing-nowhere-nowhen.ru через запятую. Например: SuperMeatBoy,12345',
+                                 message='Введите ваш логин и пароль на сайте https://nothing-nowhere-nowhen.ru через запятую. Например: SuperMeatBoy,12345.',
                                  random_id=random.randint(0, 2 ** 64),
                                  keyboard=kb)
             else:
                 vk.messages.send(user_id=event.obj.message['from_id'],
-                                 message='Вы уже авторизованы',
+                                 message='Вы уже авторизованы.',
                                  random_id=random.randint(0, 2 ** 64),
                                  keyboard=kb)
         elif event.message.text.lower() == 'сыграть в викторину':
+            all_info[event.obj.message['from_id']]['try_to_in'] = 0
+            all_info[event.obj.message['from_id']]['flag_game'] = 1
+            all_info[event.obj.message['from_id']]['number_quest'] = 0
+            all_info[event.obj.message['from_id']]['right_answers'] = 0
+            all_info[event.obj.message['from_id']]['right_answers'] = 0
+            all_info[event.obj.message['from_id']]['def_answers'] = 0
             k = get('https://nothing-nowhere-nowhen.ru/api/questions').json()['questions']
-            quest_number = random.randint(0, len(k))
-            temp = k[quest_number]['answers'].split('!@#$%')
-            while k[quest_number]['type'] == 'write' or k[quest_number]['images'] != ' ' or len(temp[0]) >= 40 or len(temp[1]) >= 40 or len(temp[2]) >= 40 or len(temp[3]) >= 40:
-                quest_number = random.randint(0, len(k))
-                temp = k[quest_number]['answers'].split('!@#$%')
-            flag_game = 1
-            answers = [x.lower().strip() for x in k[quest_number]['right_answer'].split('!@#$%')]
+            quest_number = random.randint(0, len(k) - 1)
+            all_info[event.obj.message['from_id']]['temp'] = k[quest_number]['answers'].split('!@#$%')
+            while k[quest_number]['type'] == 'write' or k[quest_number]['images'] != ' ' or len(all_info[event.obj.message['from_id']]['temp'][0]) >= 40 or len(all_info[event.obj.message['from_id']]['temp'][1]) >= 40 or len(all_info[event.obj.message['from_id']]['temp'][2]) >= 40 or len(all_info[event.obj.message['from_id']]['temp'][3]) >= 40:
+                quest_number = random.randint(0, len(k) - 1)
+                all_info[event.obj.message['from_id']]['temp'] = k[quest_number]['answers'].split('!@#$%')
+            all_info[event.obj.message['from_id']]['answers'] = [x.lower().strip() for x in k[quest_number]['right_answer'].split('!@#$%')]
             vk.messages.send(user_id=event.obj.message['from_id'],
                              message='Начинаем!',
                              random_id=random.randint(0, 2 ** 64))
             vk.messages.send(user_id=event.obj.message['from_id'],
+                             message='Вопрос №1',
+                             random_id=random.randint(0, 2 ** 64))
+            vk.messages.send(user_id=event.obj.message['from_id'],
                              message=k[quest_number]['text'],
                              random_id=random.randint(0, 2 ** 64),
-                             keyboard=create_keyboard_questions_answer(*temp))
-        elif event.message.text.lower() == 'завершить игру!':
-            quest_number = 0
+                             keyboard=create_keyboard_questions_answer(*all_info[event.obj.message['from_id']]['temp']))
+        elif event.message.text.lower() == 'завершить игру':
+            all_info[event.obj.message['from_id']]['try_to_in'] = 0
+            all_info[event.obj.message['from_id']]['flag_game'] = 0
+            all_info[event.obj.message['from_id']]['number_quest'] = 0
             vk.messages.send(user_id=event.obj.message['from_id'],
-                             message=f'Игра закончена. Вы ответили правильно {right_answers} раз и неправильно {def_answers}',
+                             message=f'Игра закончена. Вы ответили правильно {all_info[event.obj.message["from_id"]]["right_answers"]} раз и неправильно {all_info[event.obj.message["from_id"]]["def_answers"]}',
                              random_id=random.randint(0, 2 ** 64),
                              keyboard=kb)
-            right_answers = 0
-            def_answers = 0
-        elif flag_game:
-            number_quest += 1
-            if event.message.text.lower() in set(answers):
+            all_info[event.obj.message['from_id']]['right_answers'] = 0
+            all_info[event.obj.message['from_id']]['def_answers'] = 0
+        elif 'flag_game' in all_info[event.obj.message['from_id']] and all_info[event.obj.message['from_id']]['flag_game']:
+            all_info[event.obj.message['from_id']]['try_to_in'] = 0
+            all_info[event.obj.message['from_id']]['number_quest'] += 1
+            if event.message.text.lower() in set(all_info[event.obj.message['from_id']]['answers']):
                 vk.messages.send(user_id=event.obj.message['from_id'],
                                  message='Правильно!',
                                  random_id=random.randint(0, 2 ** 64))
                 k = get('https://nothing-nowhere-nowhen.ru/api/questions').json()['questions']
-                quest_number = random.randint(0, len(k))
-                right_answers += 1
-                temp = k[quest_number]['answers'].split('!@#$%')
-                while k[quest_number]['type'] == 'write' or k[quest_number]['images'] != ' ' or len(temp[0]) >= 40 or len(temp[1]) >= 40 or len(temp[2]) >= 40 or len(temp[3]) >= 40:
-                    quest_number = random.randint(0, len(k))
-                    temp = k[quest_number]['answers'].split('!@#$%')
-                temp = k[quest_number]['answers'].split('!@#$%')
-                flag_game = 1
-                answers = [x.lower().strip() for x in k[quest_number]['right_answer'].split('!@#$%')]
+                quest_number = random.randint(0, len(k) - 1)
+                all_info[event.obj.message['from_id']]['right_answers'] += 1
+                all_info[event.obj.message['from_id']]['temp'] = k[quest_number]['answers'].split('!@#$%')
+                while k[quest_number]['type'] == 'write' or k[quest_number]['images'] != ' ' or len(all_info[event.obj.message['from_id']]['temp'][0]) >= 40 or len(all_info[event.obj.message['from_id']]['temp'][1]) >= 40 or len(all_info[event.obj.message['from_id']]['temp'][2]) >= 40 or len(all_info[event.obj.message['from_id']]['temp'][3]) >= 40:
+                    quest_number = random.randint(0, len(k) - 1)
+                    all_info[event.obj.message['from_id']]['temp'] = k[quest_number]['answers'].split('!@#$%')
+                all_info[event.obj.message['from_id']]['temp'] = k[quest_number]['answers'].split('!@#$%')
+                all_info[event.obj.message['from_id']]['flag_game'] = 1
+                all_info[event.obj.message['from_id']]['answers'] = [x.lower().strip() for x in k[quest_number]['right_answer'].split('!@#$%')]
                 vk.messages.send(user_id=event.obj.message['from_id'],
-                                 message=f'Вопрос №{number_quest + 1}',
+                                 message=f'Вопрос №{all_info[event.obj.message["from_id"]]["number_quest"] + 1}',
                                  random_id=random.randint(0, 2 ** 64))
                 vk.messages.send(user_id=event.obj.message['from_id'],
                                  message=k[quest_number]['text'],
                                  random_id=random.randint(0, 2 ** 64),
-                                 keyboard=create_keyboard_questions_answer(*temp))
+                                 keyboard=create_keyboard_questions_answer(*all_info[event.obj.message['from_id']]['temp']))
             else:
                 vk.messages.send(user_id=event.obj.message['from_id'],
-                                 message=f'Неправильно! Правильный ответ: {answers[0]}',
+                                 message=f'Неправильно! Правильный ответ:\n{all_info[event.obj.message["from_id"]]["answers"][0][0].upper() + all_info[event.obj.message["from_id"]]["answers"][0][1:]}.',
                                  random_id=random.randint(0, 2 ** 64))
                 k = get('https://nothing-nowhere-nowhen.ru/api/questions').json()['questions']
-                def_answers += 1
-                quest_number = random.randint(0, len(k))
-                temp = k[quest_number]['answers'].split('!@#$%')
-                while k[quest_number]['type'] == 'write' or k[quest_number]['images'] != ' ' or len(temp[0]) >= 40 or len(temp[1]) >= 40 or len(temp[2]) >= 40 or len(temp[3]) >= 40:
-                    quest_number = random.randint(0, len(k))
-                    temp = k[quest_number]['answers'].split('!@#$%')
-                temp = k[quest_number]['answers'].split('!@#$%')
+                all_info[event.obj.message['from_id']]['def_answers'] += 1
+                quest_number = random.randint(0, len(k) - 1)
+                all_info[event.obj.message['from_id']]['temp'] = k[quest_number]['answers'].split('!@#$%')
+                while k[quest_number]['type'] == 'write' or k[quest_number]['images'] != ' ' or len(all_info[event.obj.message['from_id']]['temp'][0]) >= 40 or len(all_info[event.obj.message['from_id']]['temp'][1]) >= 40 or len(all_info[event.obj.message['from_id']]['temp'][2]) >= 40 or len(all_info[event.obj.message['from_id']]['temp'][3]) >= 40:
+                    quest_number = random.randint(0, len(k) - 1)
+                    all_info[event.obj.message['from_id']]['temp'] = k[quest_number]['answers'].split('!@#$%')
+                all_info[event.obj.message['from_id']]['temp'] = k[quest_number]['answers'].split('!@#$%')
                 flag_game = 1
-                answers = [x.lower().strip() for x in k[quest_number]['right_answer'].split('!@#$%')]
+                all_info[event.obj.message['from_id']]['answers'] = [x.lower().strip() for x in k[quest_number]['right_answer'].split('!@#$%')]
                 vk.messages.send(user_id=event.obj.message['from_id'],
-                                 message=f'Вопрос №{number_quest + 1}',
+                                 message=f'Вопрос №{all_info[event.obj.message["from_id"]]["number_quest"] + 1}',
                                  random_id=random.randint(0, 2 ** 64))
                 vk.messages.send(user_id=event.obj.message['from_id'],
                                  message=k[quest_number]['text'],
                                  random_id=random.randint(0, 2 ** 64),
-                                 keyboard=create_keyboard_questions_answer(*temp))
-        elif try_to_in_for_open:
+                                 keyboard=create_keyboard_questions_answer(*all_info[event.obj.message['from_id']]['temp']))
+        elif 'try_to_in' in all_info[event.obj.message['from_id']] and all_info[event.obj.message['from_id']]['try_to_in']:
             try:
-                try_to_in_for_open = 0
                 nickname, password = event.message.text.lower().replace(' ', '').split(',')
                 nickname = nickname.lower()
                 users = get('https://nothing-nowhere-nowhen.ru/api/12345/users').json()['users']
@@ -208,25 +216,26 @@ for event in long_poll.listen():
                         break
 
                 if good:
-                    try_to_in = 0
+                    all_info[event.obj.message['from_id']]['try_to_in'] = 0
                     USERS.append(event.obj.message['from_id'])
-                    ID_WITH_USERS[event.obj.message['from_id']] = cur_user
+                    all_info[event.obj.message['from_id']]['user'] = cur_user
                     vk.messages.send(user_id=event.obj.message['from_id'],
-                                     message='Вы успешно авторизовались',
+                                     message='Вы успешно авторизовались.',
                                      random_id=random.randint(0, 2 ** 64),
                                      keyboard=kb_in)
                 else:
                     vk.messages.send(user_id=event.obj.message['from_id'],
-                                     message='Данные некорректны, попробуйте еще раз',
+                                     message='Данные некорректны, попробуйте еще раз.',
                                      random_id=random.randint(0, 2 ** 64),
                                      keyboard=kb)
             except Exception:
                 vk.messages.send(user_id=event.obj.message['from_id'],
-                                 message='Данные некорректны, попробуйте еще раз',
+                                 message='Данные некорректны, попробуйте еще раз.',
                                  random_id=random.randint(0, 2 ** 64),
                                  keyboard=kb)
         else:
+            all_info[event.obj.message['from_id']]['try_to_in'] = 0
             vk.messages.send(user_id=event.obj.message['from_id'],
-                             message='Неизвестная команда. Пожалуйста, воспользуйтесь кнопками',
+                             message='Неизвестная команда. Пожалуйста, воспользуйтесь кнопками.',
                              random_id=random.randint(0, 2 ** 64),
                              keyboard=kb)
